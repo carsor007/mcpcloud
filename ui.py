@@ -25,6 +25,7 @@ _HTML = """<!DOCTYPE html>
     --text-dim: #7c82a8;
     --green: #4ade80;
     --red: #f87171;
+    --yellow: #fbbf24;
     --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
   }
 
@@ -40,22 +41,23 @@ _HTML = """<!DOCTYPE html>
   header {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
+    padding: 14px 24px;
     display: flex;
     align-items: center;
     gap: 12px;
   }
 
-  header .logo {
+  .logo {
     font-size: 18px;
     font-weight: 700;
     letter-spacing: -0.3px;
     color: var(--text);
+    cursor: pointer;
+    user-select: none;
   }
+  .logo span { color: var(--accent); }
 
-  header .logo span { color: var(--accent); }
-
-  header .badge {
+  .badge {
     background: var(--accent-dim);
     color: var(--accent);
     font-size: 11px;
@@ -65,8 +67,27 @@ _HTML = """<!DOCTYPE html>
     letter-spacing: 0.3px;
   }
 
-  header .status {
+  .header-right {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .guide-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .guide-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .status {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -74,16 +95,15 @@ _HTML = """<!DOCTYPE html>
     color: var(--text-dim);
   }
 
-  header .dot {
+  .dot {
     width: 7px; height: 7px;
     border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 6px var(--green);
+    background: var(--text-dim);
   }
 
   .layout {
     display: flex;
-    height: calc(100vh - 57px);
+    height: calc(100vh - 53px);
   }
 
   /* Sidebar */
@@ -97,7 +117,7 @@ _HTML = """<!DOCTYPE html>
   }
 
   .sidebar-section {
-    padding: 6px 16px 2px;
+    padding: 8px 16px 2px;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.8px;
@@ -111,13 +131,8 @@ _HTML = """<!DOCTYPE html>
     border-left: 3px solid transparent;
     transition: background 0.1s, border-color 0.1s;
   }
-
   .tool-item:hover { background: var(--surface2); }
-
-  .tool-item.active {
-    background: var(--surface2);
-    border-left-color: var(--accent);
-  }
+  .tool-item.active { background: var(--surface2); border-left-color: var(--accent); }
 
   .tool-name {
     font-family: var(--mono);
@@ -141,7 +156,10 @@ _HTML = """<!DOCTYPE html>
     padding: 20px 16px;
     font-size: 12px;
     color: var(--text-dim);
+    line-height: 1.7;
   }
+
+  .agent-group { margin-top: 6px; }
 
   /* Main panel */
   .main {
@@ -152,19 +170,6 @@ _HTML = """<!DOCTYPE html>
     flex-direction: column;
     gap: 20px;
   }
-
-  .placeholder {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    color: var(--text-dim);
-  }
-
-  .placeholder .icon { font-size: 40px; }
-  .placeholder p { font-size: 13px; }
 
   /* Cards */
   .card {
@@ -179,6 +184,7 @@ _HTML = """<!DOCTYPE html>
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
   }
 
@@ -190,6 +196,145 @@ _HTML = """<!DOCTYPE html>
 
   .card-body { padding: 16px 18px; }
 
+  /* Guide styles */
+  .guide-intro {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+
+  .guide-intro strong { color: var(--text); }
+
+  .guide-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+
+  @media (max-width: 900px) { .guide-grid { grid-template-columns: 1fr; } }
+
+  .guide-tile {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .guide-tile-icon { font-size: 22px; }
+
+  .guide-tile-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .guide-tile-body {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .guide-tile-body code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+
+  /* Steps */
+  .steps { display: flex; flex-direction: column; gap: 0; }
+
+  .step {
+    display: flex;
+    gap: 14px;
+    position: relative;
+  }
+
+  .step:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 32px;
+    bottom: -4px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .step-num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+    z-index: 1;
+  }
+
+  .step-content { padding-bottom: 20px; flex: 1; }
+
+  .step-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .step-body {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+
+  .step-body code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+
+  /* Code blocks */
+  .code-wrap { position: relative; margin-top: 10px; }
+
+  .code-block {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 14px 14px 14px;
+    color: #a9b1d6;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+
+  .copy-btn {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 4px;
+    padding: 3px 9px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+
   /* Tool detail */
   .tool-full-name {
     font-family: var(--mono);
@@ -197,14 +342,8 @@ _HTML = """<!DOCTYPE html>
     font-weight: 700;
     color: var(--text);
   }
+  .tool-full-desc { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
 
-  .tool-full-desc {
-    color: var(--text-dim);
-    font-size: 13px;
-    margin-top: 4px;
-  }
-
-  /* Schema view */
   .schema-block {
     font-family: var(--mono);
     font-size: 12px;
@@ -218,7 +357,6 @@ _HTML = """<!DOCTYPE html>
     line-height: 1.5;
   }
 
-  /* Input textarea */
   textarea {
     width: 100%;
     background: var(--bg);
@@ -234,10 +372,8 @@ _HTML = """<!DOCTYPE html>
     transition: border-color 0.15s;
     line-height: 1.5;
   }
-
   textarea:focus { border-color: var(--accent); }
 
-  /* Button */
   button.run-btn {
     background: var(--accent);
     color: #fff;
@@ -247,16 +383,14 @@ _HTML = """<!DOCTYPE html>
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.15s, background 0.15s;
+    transition: opacity 0.15s;
     display: flex;
     align-items: center;
     gap: 7px;
   }
-
   button.run-btn:hover { opacity: 0.88; }
   button.run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* Result */
   .result-header {
     display: flex;
     align-items: center;
@@ -266,7 +400,6 @@ _HTML = """<!DOCTYPE html>
     padding: 14px 18px;
     border-bottom: 1px solid var(--border);
   }
-
   .result-header.ok { color: var(--green); }
   .result-header.err { color: var(--red); }
 
@@ -288,11 +421,7 @@ _HTML = """<!DOCTYPE html>
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
-
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* Agent group label in sidebar */
-  .agent-group { margin-top: 8px; }
 
   label.input-label {
     font-size: 11px;
@@ -304,35 +433,39 @@ _HTML = """<!DOCTYPE html>
     margin-bottom: 6px;
   }
 
-  .input-hint {
-    font-size: 11px;
+  .input-hint { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
     color: var(--text-dim);
-    margin-top: 6px;
+    padding: 1px 7px;
+    border-radius: 4px;
   }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">a2a<span>-mcp</span></div>
+  <div class="logo" onclick="showGuide()">a2a<span>-mcp</span></div>
   <div class="badge">Tool Browser</div>
-  <div class="status">
-    <div class="dot" id="status-dot"></div>
-    <span id="status-text">connecting…</span>
+  <div class="header-right">
+    <button class="guide-btn" onclick="showGuide()">? Guide</button>
+    <div class="status">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">connecting…</span>
+    </div>
   </div>
 </header>
 
 <div class="layout">
   <nav class="sidebar" id="sidebar">
-    <div class="empty-sidebar">Loading tools…</div>
+    <div class="empty-sidebar">Loading…</div>
   </nav>
-
-  <main class="main" id="main">
-    <div class="placeholder">
-      <div class="icon">⚡</div>
-      <p>Select a tool from the sidebar to get started.</p>
-    </div>
-  </main>
+  <main class="main" id="main"></main>
 </div>
 
 <script>
@@ -340,6 +473,176 @@ const $ = id => document.getElementById(id)
 
 let allTools = []
 let activeToolName = null
+
+// ── Skill file template ───────────────────────────────────────────────────────
+const SKILL_TEMPLATE = `# skills/my_tools.py
+from registry import SkillResult, get_registry
+
+async def my_skill(input: dict, context: dict) -> SkillResult:
+    \'\'\'One-line description shown in this UI.\'\'\'
+    value = input.get("text", "")
+    return SkillResult(success=True, output={"result": value.upper()})
+
+def register_all():
+    get_registry().register(
+        "my_tools",     # agent type  →  groups skills in the sidebar
+        "my_skill",     # skill name  →  shown under the group
+        my_skill,
+        schema={
+            "type": "object",
+            "required": ["text"],
+            "properties": {
+                "text": {"type": "string", "description": "Input text"}
+            }
+        }
+    )`
+
+const CLAUDE_CONFIG = `// ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "my_tools": {
+      "url": "http://localhost:8000/mcp/my_tools",
+      "transport": "http"
+    }
+  }
+}`
+
+// ── Guide view ────────────────────────────────────────────────────────────────
+function showGuide() {
+  if (activeToolName) {
+    const prev = document.getElementById('item-' + CSS.escape(activeToolName))
+    if (prev) prev.classList.remove('active')
+    activeToolName = null
+  }
+
+  $('main').innerHTML = `
+    <div class="card">
+      <div class="card-header"><div class="card-title">What is a2a-mcp?</div></div>
+      <div class="card-body">
+        <p class="guide-intro">
+          <strong>a2a-mcp</strong> is a self-hosted MCP (Model Context Protocol) gateway.
+          Write any Python function, register it as a skill, and it instantly becomes
+          a tool that Claude Desktop, Claude API, Cursor, or any MCP client can call —
+          no infrastructure changes, no vendor lock-in.
+        </p>
+        <div style="margin-top:18px" class="guide-grid">
+          <div class="guide-tile">
+            <div class="guide-tile-icon">📁</div>
+            <div class="guide-tile-title">Sidebar — Agent types</div>
+            <div class="guide-tile-body">
+              The left panel groups skills by <strong>agent type</strong> — the first part of a tool name like
+              <code>example</code> in <code>example__echo</code>.
+              Each file in <code>skills/</code> defines one agent type and its skills.
+            </div>
+          </div>
+          <div class="guide-tile">
+            <div class="guide-tile-icon">🔧</div>
+            <div class="guide-tile-title">Tools — Skills</div>
+            <div class="guide-tile-body">
+              Each item under an agent type is a <strong>skill</strong> — an async Python function.
+              Click one to see its input schema and call it live.
+              Tool names follow the pattern <code>agent_type__skill_name</code>.
+            </div>
+          </div>
+          <div class="guide-tile">
+            <div class="guide-tile-icon">⚡</div>
+            <div class="guide-tile-title">Redis — Multi-worker</div>
+            <div class="guide-tile-body">
+              Session tracking uses Redis when <code>REDIS_URL</code> is set (included in Docker Compose).
+              Without it, an in-process dict is used — fine for local dev and single-worker deploys.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">How to add a skill</div></div>
+      <div class="card-body">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">Create a file in <code>skills/</code></div>
+              <div class="step-body">
+                Drop any <code>.py</code> file into the <code>skills/</code> directory.
+                The gateway auto-discovers it on startup — no config changes needed.
+              </div>
+              <div class="code-wrap">
+                <div class="code-block" id="cb-skill">${escHtml(SKILL_TEMPLATE)}</div>
+                <button class="copy-btn" onclick="copy('cb-skill', this)">Copy</button>
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">Restart the server</div>
+              <div class="step-body">
+                Skills are loaded at startup. In Docker: <code>docker compose restart mcp</code>.
+                In dev with <code>HOT_RELOAD=true</code>: the server reloads automatically.
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <div class="step-title">Your skill appears in this UI</div>
+              <div class="step-body">
+                Refresh this page. The new agent type and skill will appear in the sidebar.
+                Click it to see the schema and test it live.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Connect an MCP client</div></div>
+      <div class="card-body">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">Get the config snippet from the API</div>
+              <div class="step-body">
+                Each agent type has a ready-to-paste config endpoint:<br>
+                <code>GET /mcp/{agent_type}/config</code><br><br>
+                For example: <code>GET http://localhost:8000/mcp/example/config</code>
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">Add it to Claude Desktop</div>
+              <div class="step-body">
+                Paste the returned object into <code>claude_desktop_config.json</code>
+                under <code>"mcpServers"</code>. Restart Claude Desktop.
+              </div>
+              <div class="code-wrap">
+                <div class="code-block" id="cb-claude">${escHtml(CLAUDE_CONFIG)}</div>
+                <button class="copy-btn" onclick="copy('cb-claude', this)">Copy</button>
+              </div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <div class="step-title">All tools available immediately</div>
+              <div class="step-body">
+                Claude can now call your registered skills as tools in any conversation.
+                Scope a client to one agent type via <code>/mcp/{agent_type}</code>,
+                or expose everything via <code>/mcp</code>.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+}
 
 // ── Fetch tools ───────────────────────────────────────────────────────────────
 async function loadTools() {
@@ -361,16 +664,16 @@ async function loadTools() {
     $('status-text').textContent = 'server unreachable'
     $('sidebar').innerHTML = '<div class="empty-sidebar">Could not connect to server.</div>'
   }
+  showGuide()
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function renderSidebar(tools) {
   if (!tools.length) {
-    $('sidebar').innerHTML = '<div class="empty-sidebar">No tools registered yet.<br>Add a file to skills/ to get started.</div>'
+    $('sidebar').innerHTML = '<div class="empty-sidebar">No skills registered yet.<br><br>Add a <code>.py</code> file to <code>skills/</code> — click <strong>? Guide</strong> to see how.</div>'
     return
   }
 
-  // Group by agent_type (prefix before __)
   const groups = {}
   tools.forEach(t => {
     const [agent] = t.name.split('__')
@@ -397,11 +700,11 @@ function renderSidebar(tools) {
 // ── Select tool ───────────────────────────────────────────────────────────────
 function selectTool(name) {
   if (activeToolName) {
-    const prev = document.getElementById(`item-${CSS.escape(activeToolName)}`)
+    const prev = document.getElementById('item-' + CSS.escape(activeToolName))
     if (prev) prev.classList.remove('active')
   }
   activeToolName = name
-  const item = document.getElementById(`item-${CSS.escape(name)}`)
+  const item = document.getElementById('item-' + CSS.escape(name))
   if (item) item.classList.add('active')
 
   const tool = allTools.find(t => t.name === name)
@@ -417,6 +720,7 @@ function selectTool(name) {
           <div class="tool-full-name">${name}</div>
           <div class="tool-full-desc">${tool.description || 'No description provided.'}</div>
         </div>
+        <span class="tag">${name.split('__')[0]}</span>
       </div>
       <div class="card-body">
         <label class="input-label">Input schema</label>
@@ -449,7 +753,7 @@ function selectTool(name) {
   `
 }
 
-// ── Build a sensible default JSON from schema ─────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function buildDefaultInput(schema) {
   if (!schema || !schema.properties) return {}
   const out = {}
@@ -461,6 +765,18 @@ function buildDefaultInput(schema) {
     else out[key] = {}
   }
   return out
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
+function copy(blockId, btn) {
+  const text = document.getElementById(blockId).textContent
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!'
+    setTimeout(() => { btn.textContent = 'Copy' }, 1800)
+  })
 }
 
 // ── Run tool ──────────────────────────────────────────────────────────────────
