@@ -14,6 +14,7 @@ from config.settings import get_settings
 from mcp import router as mcp_router
 from session import get_tracker
 from shared.logging import setup_logging
+from ui import router as ui_router
 
 setup_logging()
 logger = structlog.get_logger()
@@ -54,6 +55,7 @@ async def health():
 
 
 app.include_router(mcp_router, prefix="/mcp", tags=["mcp"])
+app.include_router(ui_router, prefix="/ui", tags=["ui"])
 
 
 if __name__ == "__main__":
