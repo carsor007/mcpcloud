@@ -1,0 +1,382 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  a2a-mcp — Self-hosted MCP gateway.
+  Deploys on ECS Fargate with ElastiCache Redis, an Application Load Balancer,
+  and Secrets Manager for credential storage.
+
+# ── Parameters ────────────────────────────────────────────────────────────────
+
+Parameters:
+
+  # Network
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to deploy into.
+
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least 2 public subnets (different AZs) for the load balancer.
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for ECS tasks and ElastiCache (can be same as public).
+
+  # Container
+  ContainerImage:
+    Type: String
+    Description: >
+      ECR image URI.
+      e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/a2a-mcp:latest
+
+  # TLS (optional)
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: >
+      ACM certificate ARN for HTTPS. Leave empty for HTTP only.
+      Recommended for production — create a cert at AWS Certificate Manager.
+
+  # Capacity
+  TaskCount:
+    Type: Number
+    Default: 2
+    Description: Number of ECS tasks to run (min 2 for high availability).
+
+  CacheNodeType:
+    Type: String
+    Default: cache.t4g.micro
+    AllowedValues:
+      - cache.t4g.micro
+      - cache.t4g.small
+      - cache.t4g.medium
+    Description: ElastiCache node type. t4g.micro (~$15/mo) is sufficient for most teams.
+
+  # Integrations (all optional — skills fall back to stub mode if empty)
+  JiraUrl:
+    Type: String
+    Default: ''
+    Description: e.g. https://your-domain.atlassian.net
+
+  JiraEmail:
+    Type: String
+    Default: ''
+
+  JiraApiToken:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Atlassian API token (atlassian.com/manage-profile/security/api-tokens)
+
+  JiraProject:
+    Type: String
+    Default: IT
+    Description: Default Jira project key.
+
+  SlackWebhookUrl:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Slack incoming webhook URL (api.slack.com/apps → Incoming Webhooks)
+
+  AnthropicApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Anthropic API key — required only by skills that call Claude.
+
+  OpenAiApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: OpenAI API key — required only by skills that call OpenAI.
+
+# ── Conditions ────────────────────────────────────────────────────────────────
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+
+# ── Resources ─────────────────────────────────────────────────────────────────
+
+Resources:
+
+  # ── Logging ──────────────────────────────────────────────────────────────────
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${AWS::StackName}'
+      RetentionInDays: 30
+
+  # ── Secrets ───────────────────────────────────────────────────────────────────
+  # Sensitive values are stored in Secrets Manager — never in task env vars.
+
+  AppSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}/credentials'
+      Description: API credentials for a2a-mcp integrations
+      SecretString: !Sub |
+        {
+          "JIRA_API_TOKEN":     "${JiraApiToken}",
+          "SLACK_WEBHOOK_URL":  "${SlackWebhookUrl}",
+          "ANTHROPIC_API_KEY":  "${AnthropicApiKey}",
+          "OPENAI_API_KEY":     "${OpenAiApiKey}"
+        }
+
+  # ── IAM ───────────────────────────────────────────────────────────────────────
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-task-execution'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref AppSecrets
+
+  # ── ECS Cluster ───────────────────────────────────────────────────────────────
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${AWS::StackName}'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  # ── Security Groups ───────────────────────────────────────────────────────────
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB — allow inbound HTTP and HTTPS
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  TaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ECS tasks — allow inbound from ALB on port 8000
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ElastiCache — allow inbound from ECS tasks on port 6379
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref TaskSecurityGroup
+
+  # ── ElastiCache Redis ─────────────────────────────────────────────────────────
+
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Subnets for a2a-mcp Redis
+      SubnetIds: !Ref PrivateSubnetIds
+
+  Redis:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupDescription: a2a-mcp session tracking
+      AutomaticFailoverEnabled: false
+      NumCacheClusters: 1
+      CacheNodeType: !Ref CacheNodeType
+      Engine: redis
+      EngineVersion: '7.1'
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      SecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: false  # set true and add AuthToken for stricter security
+
+  # ── Load Balancer ─────────────────────────────────────────────────────────────
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      Subnets: !Ref PublicSubnetIds
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 8000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - !If
+          - HasCertificate
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              StatusCode: HTTP_301
+          - Type: forward
+            TargetGroupArn: !Ref TargetGroup
+
+  HttpsListener:
+    Condition: HasCertificate
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ── ECS Task & Service ────────────────────────────────────────────────────────
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${AWS::StackName}'
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: a2a-mcp
+          Image: !Ref ContainerImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+              Protocol: tcp
+          Environment:
+            - Name: REDIS_URL
+              Value: !Sub 'redis://${Redis.PrimaryEndPoint.Address}:${Redis.PrimaryEndPoint.Port}'
+            - Name: JIRA_URL
+              Value: !Ref JiraUrl
+            - Name: JIRA_EMAIL
+              Value: !Ref JiraEmail
+            - Name: JIRA_PROJECT
+              Value: !Ref JiraProject
+          Secrets:
+            - Name: JIRA_API_TOKEN
+              ValueFrom: !Sub '${AppSecrets}:JIRA_API_TOKEN::'
+            - Name: SLACK_WEBHOOK_URL
+              ValueFrom: !Sub '${AppSecrets}:SLACK_WEBHOOK_URL::'
+            - Name: ANTHROPIC_API_KEY
+              ValueFrom: !Sub '${AppSecrets}:ANTHROPIC_API_KEY::'
+            - Name: OPENAI_API_KEY
+              ValueFrom: !Sub '${AppSecrets}:OPENAI_API_KEY::'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - 'wget -q -O- http://localhost:8000/health || exit 1'
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 15
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - HttpListener
+    Properties:
+      ServiceName: !Sub '${AWS::StackName}'
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref TaskCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups:
+            - !Ref TaskSecurityGroup
+      LoadBalancers:
+        - ContainerName: a2a-mcp
+          ContainerPort: 8000
+          TargetGroupArn: !Ref TargetGroup
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 50
+        MaximumPercent: 200
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+
+Outputs:
+
+  Endpoint:
+    Description: a2a-mcp base URL
+    Value: !If
+      - HasCertificate
+      - !Sub 'https://${LoadBalancer.DNSName}'
+      - !Sub 'http://${LoadBalancer.DNSName}'
+
+  MCPEndpoint:
+    Description: MCP tool endpoint (point Claude Desktop here)
+    Value: !If
+      - HasCertificate
+      - !Sub 'https://${LoadBalancer.DNSName}/mcp'
+      - !Sub 'http://${LoadBalancer.DNSName}/mcp'
+
+  UIEndpoint:
+    Description: Tool browser UI
+    Value: !If
+      - HasCertificate
+      - !Sub 'https://${LoadBalancer.DNSName}/ui'
+      - !Sub 'http://${LoadBalancer.DNSName}/ui'
+
+  SecretsArn:
+    Description: Secrets Manager ARN — update credentials here after deployment
+    Value: !Ref AppSecrets
