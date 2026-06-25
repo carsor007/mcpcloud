@@ -110,6 +110,7 @@ _HTML = """<!DOCTYPE html>
   .sidebar {
     width: 260px;
     flex-shrink: 0;
+    min-height: 0;
     background: var(--surface);
     border-right: 1px solid var(--border);
     overflow-y: auto;
@@ -164,6 +165,7 @@ _HTML = """<!DOCTYPE html>
   /* Main panel */
   .main {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 24px;
     display: flex;
