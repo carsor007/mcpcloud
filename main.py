@@ -1,4 +1,4 @@
-"""a2a-mcp — self-hosted MCP gateway.
+"""MCPCloud — self-hosted MCP gateway.
 
 Expose any Python function as an MCP tool. One deploy, any MCP client.
 """
@@ -25,14 +25,14 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     import skills
     skills.register_all()
-    logger.info("a2a-mcp started", redis=bool(settings.REDIS_URL))
+    logger.info("MCPCloud started", redis=bool(settings.REDIS_URL))
     yield
     await get_tracker().close()
-    logger.info("a2a-mcp stopped")
+    logger.info("MCPCloud stopped")
 
 
 app = FastAPI(
-    title="a2a-mcp",
+    title="MCPCloud",
     description="Self-hosted MCP gateway — expose any Python function as an MCP tool.",
     version="0.1.0",
     docs_url="/docs" if settings.DEBUG_MODE else None,
@@ -51,7 +51,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "a2a-mcp", "version": "0.1.0"}
+    return {"status": "ok", "service": "MCPCloud", "version": "0.1.0"}
 
 
 app.include_router(mcp_router, prefix="/mcp", tags=["mcp"])

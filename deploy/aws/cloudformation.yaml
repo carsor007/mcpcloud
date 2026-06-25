@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  a2a-mcp — Self-hosted MCP gateway.
+  MCPCloud — Self-hosted MCP gateway.
   Deploys on ECS Fargate with ElastiCache Redis, an Application Load Balancer,
   and Secrets Manager for credential storage.
 
@@ -25,8 +25,8 @@ Parameters:
   ContainerImage:
     Type: String
     Description: >
-      ECR image URI.
-      e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/a2a-mcp:latest
+      ECR Public image URI.
+      e.g. public.ecr.aws/YOUR_ALIAS/mcpcloud:latest
 
   # TLS (optional)
   CertificateArn:
@@ -114,7 +114,7 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub '${AWS::StackName}/credentials'
-      Description: API credentials for a2a-mcp integrations
+      Description: API credentials for MCPCloud integrations
       SecretString: !Sub |
         {
           "JIRA_API_TOKEN":     "${JiraApiToken}",
@@ -162,7 +162,7 @@ Resources:
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ALB — allow inbound HTTP and HTTPS
+      GroupDescription: MCPCloud ALB — allow inbound HTTP and HTTPS
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -177,7 +177,7 @@ Resources:
   TaskSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ECS tasks — allow inbound from ALB on port 8000
+      GroupDescription: MCPCloud ECS tasks — allow inbound from ALB on port 8000
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -188,7 +188,7 @@ Resources:
   RedisSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ElastiCache — allow inbound from ECS tasks on port 6379
+      GroupDescription: MCPCloud ElastiCache — allow inbound from ECS tasks on port 6379
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -201,13 +201,13 @@ Resources:
   RedisSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
-      Description: Subnets for a2a-mcp Redis
+      Description: Subnets for MCPCloud Redis
       SubnetIds: !Ref PrivateSubnetIds
 
   Redis:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
-      ReplicationGroupDescription: a2a-mcp session tracking
+      ReplicationGroupDescription: MCPCloud session tracking
       AutomaticFailoverEnabled: false
       NumCacheClusters: 1
       CacheNodeType: !Ref CacheNodeType
@@ -289,7 +289,7 @@ Resources:
         - FARGATE
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
       ContainerDefinitions:
-        - Name: a2a-mcp
+        - Name: mcpcloud
           Image: !Ref ContainerImage
           Essential: true
           PortMappings:
@@ -345,7 +345,7 @@ Resources:
           SecurityGroups:
             - !Ref TaskSecurityGroup
       LoadBalancers:
-        - ContainerName: a2a-mcp
+        - ContainerName: mcpcloud
           ContainerPort: 8000
           TargetGroupArn: !Ref TargetGroup
       DeploymentConfiguration:
@@ -357,7 +357,7 @@ Resources:
 Outputs:
 
   Endpoint:
-    Description: a2a-mcp base URL
+    Description: MCPCloud base URL
     Value: !If
       - HasCertificate
       - !Sub 'https://${LoadBalancer.DNSName}'

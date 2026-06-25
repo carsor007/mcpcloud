@@ -1,10 +1,12 @@
-# a2a-mcp
+# MCPCloud
 
 Self-hosted MCP (Model Context Protocol) gateway. Write any Python function, register it as a skill, and it instantly becomes a tool that Claude Desktop, Claude API, Cursor, or any MCP-compatible client can call.
 
-[![Deploy to AWS](https://img.shields.io/badge/Deploy%20to%20AWS-ECS%20Fargate-FF9900?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://raw.githubusercontent.com/carsor007/a2a-mcp/main/deploy/aws/cloudformation.yaml&stackName=a2a-mcp)
+[![Deploy to AWS](https://img.shields.io/badge/Deploy%20to%20AWS-ECS%20Fargate-FF9900?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://raw.githubusercontent.com/carsor007/mcpcloud/main/deploy/aws/cloudformation.yaml&stackName=mcpcloud)
 [![AWS Marketplace](https://img.shields.io/badge/AWS%20Marketplace-Subscribe-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/marketplace)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)](LICENSE)
+
+**Website:** [mcpcloud.dev](https://mcpcloud.dev) · **GitHub:** [carsor007/mcpcloud](https://github.com/carsor007/mcpcloud)
 
 ---
 
@@ -13,7 +15,7 @@ Self-hosted MCP (Model Context Protocol) gateway. Write any Python function, reg
 ```
 Claude Desktop / Claude API / any MCP client
             ↓  MCP tool call
-        a2a-mcp  (this repo)
+        MCPCloud  (this repo)
             ↓  your code runs
     Jira · Slack · Salesforce · anything
 ```
@@ -27,8 +29,8 @@ Every Python function registered as a skill becomes an MCP tool. No vendor lock-
 **Run locally with Docker:**
 
 ```bash
-git clone https://github.com/carsor007/a2a-mcp.git
-cd a2a-mcp
+git clone https://github.com/carsor007/mcpcloud.git
+cd mcpcloud
 cp .env.example .env
 docker compose up
 ```
@@ -103,26 +105,25 @@ Configure by setting `SLACK_WEBHOOK_URL` in `.env`.
 
 ## Deploy to AWS
 
-The **Deploy to AWS** button above launches the CloudFormation stack in your account. It provisions:
+The **Deploy to AWS** button above launches a CloudFormation stack in your account. The public image is already hosted — no ECR setup required.
+
+It provisions:
 
 - **ECS Fargate** — 2 tasks, no EC2 to manage
 - **ElastiCache Redis** — session tracking across workers (~$15/month for t4g.micro)
 - **Application Load Balancer** — with optional HTTPS via ACM
 - **Secrets Manager** — stores Jira, Slack, and API credentials securely
 
-You will need: a VPC with at least 2 public subnets, and an ECR image (see below).
+You will need: a VPC with at least 2 public subnets.
 
-**Push the image to ECR first:**
+**One-click deploy (console):**
+
+Click the **Deploy to AWS** button above.
+
+**CLI deploy:**
 
 ```bash
 cd deploy/aws
-make ecr-create
-make push
-```
-
-Then click **Deploy to AWS** or run:
-
-```bash
 make deploy \
   VPC_ID=vpc-xxxxxxxxxxxxxxxxx \
   PUBLIC_SUBNETS=subnet-aaa,subnet-bbb \
@@ -133,6 +134,14 @@ After deployment, retrieve your URLs:
 
 ```bash
 make outputs
+```
+
+**Self-hosting your own image** (optional — if you've modified the code):
+
+```bash
+cd deploy/aws
+make ecr-public-create        # one-time: creates public ECR repo
+ECR_PUBLIC_ALIAS=your_alias make push-public
 ```
 
 ---
@@ -155,3 +164,5 @@ make outputs
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
+
+Free to self-host. Managed deployment available on [AWS Marketplace](https://aws.amazon.com/marketplace).
