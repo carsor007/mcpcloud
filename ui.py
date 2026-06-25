@@ -472,6 +472,7 @@ _HTML = """<!DOCTYPE html>
 
 <script>
 const $ = id => document.getElementById(id)
+const origin = window.location.origin
 
 let allTools = []
 let activeToolName = null
@@ -499,11 +500,11 @@ def register_all():
         }
     )`
 
-const CLAUDE_CONFIG = `// ~/Library/Application Support/Claude/claude_desktop_config.json
+const CLAUDE_CONFIG = () => `// ~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
     "my_tools": {
-      "url": "http://localhost:8000/mcp/my_tools",
+      "url": "${origin}/mcp/my_tools",
       "transport": "http"
     }
   }
@@ -611,7 +612,7 @@ function showGuide() {
               <div class="step-body">
                 Each agent type has a ready-to-paste config endpoint:<br>
                 <code>GET /mcp/{agent_type}/config</code><br><br>
-                For example: <code>GET http://localhost:8000/mcp/example/config</code>
+                For example: <code>GET ${origin}/mcp/text_analysis/config</code>
               </div>
             </div>
           </div>
@@ -624,7 +625,7 @@ function showGuide() {
                 under <code>"mcpServers"</code>. Restart Claude Desktop.
               </div>
               <div class="code-wrap">
-                <div class="code-block" id="cb-claude">${escHtml(CLAUDE_CONFIG)}</div>
+                <div class="code-block" id="cb-claude">${escHtml(CLAUDE_CONFIG())}</div>
                 <button class="copy-btn" onclick="copy('cb-claude', this)">Copy</button>
               </div>
             </div>
@@ -634,9 +635,9 @@ function showGuide() {
             <div class="step-content">
               <div class="step-title">All tools available immediately</div>
               <div class="step-body">
-                Claude can now call your registered skills as tools in any conversation.
-                Scope a client to one agent type via <code>/mcp/{agent_type}</code>,
-                or expose everything via <code>/mcp</code>.
+                Claude can now call your registered skills as tools in any conversation.<br><br>
+                Scope to one agent type: <code>${origin}/mcp/text_analysis</code><br>
+                Expose everything: <code>${origin}/mcp</code>
               </div>
             </div>
           </div>
