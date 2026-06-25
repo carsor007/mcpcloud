@@ -104,6 +104,7 @@ _HTML = """<!DOCTYPE html>
   .layout {
     display: flex;
     height: calc(100vh - 53px);
+    overflow: hidden;
   }
 
   /* Sidebar */
@@ -168,10 +169,9 @@ _HTML = """<!DOCTYPE html>
     min-height: 0;
     overflow-y: auto;
     padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
   }
+
+  .main > * + * { margin-top: 20px; }
 
   /* Cards */
   .card {
