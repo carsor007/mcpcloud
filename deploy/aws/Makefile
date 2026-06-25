@@ -1,46 +1,84 @@
-# a2a-mcp AWS deployment
+# MCPCloud — AWS deployment
 #
 # Prerequisites: AWS CLI configured, Docker running
 #
-# Usage:
-#   make ecr-create           create ECR repo (first time only)
-#   make push                 build image and push to ECR
-#   make deploy               deploy CloudFormation stack
-#   make update               redeploy after code changes (push + force ECS update)
-#   make outputs              print stack outputs (URLs)
-#   make destroy              delete the stack
+# First-time setup:
+#   1. make ecr-public-create     create a public ECR repo (once)
+#   2. make push-public           build and push the image publicly
+#   3. Update README Deploy button with your public image URI
+#
+# Per-customer deployment:
+#   make deploy VPC_ID=... PUBLIC_SUBNETS=... PRIVATE_SUBNETS=...
+#
+# After a code change:
+#   make push-public && make update
 
-REGION     ?= us-east-1
-STACK      ?= a2a-mcp
-ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text 2>/dev/null)
-ECR_REPO   := $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/a2a-mcp
-IMAGE      := $(ECR_REPO):latest
+REGION       ?= us-east-1
+STACK        ?= mcpcloud
+ACCOUNT_ID   := $(shell aws sts get-caller-identity --query Account --output text 2>/dev/null)
 
-# Required for deploy — set via environment or make args
-# VPC_ID          ?= vpc-xxxxxxxxxxxxxxxxx
-# PUBLIC_SUBNETS  ?= subnet-aaa,subnet-bbb
-# PRIVATE_SUBNETS ?= subnet-ccc,subnet-ddd
+# Private ECR (your account, for internal use / Marketplace submission)
+PRIVATE_REPO := $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/mcpcloud
+PRIVATE_IMG  := $(PRIVATE_REPO):latest
 
-.PHONY: ecr-create ecr-login push deploy update outputs destroy
+# Public ECR (gallery.ecr.aws — anyone can pull, no auth required)
+# Replace YOUR_ALIAS with your ECR Public alias after running ecr-public-create
+ECR_PUBLIC_ALIAS ?= YOUR_ALIAS
+PUBLIC_REPO      := public.ecr.aws/$(ECR_PUBLIC_ALIAS)/mcpcloud
+PUBLIC_IMG       := $(PUBLIC_REPO):latest
 
-ecr-create:
+.PHONY: ecr-private-create ecr-public-create ecr-login push-private push-public push deploy update outputs destroy
+
+# ── ECR setup ─────────────────────────────────────────────────────────────────
+
+ecr-private-create:
 	aws ecr create-repository \
-		--repository-name a2a-mcp \
+		--repository-name mcpcloud \
 		--region $(REGION) \
 		--image-scanning-configuration scanOnPush=true \
 	|| true
-	@echo "ECR repo: $(ECR_REPO)"
+	@echo "Private ECR: $(PRIVATE_REPO)"
+
+ecr-public-create:
+	@echo "Creating public ECR repository..."
+	aws ecr-public create-repository \
+		--repository-name mcpcloud \
+		--region us-east-1 \
+	|| true
+	@echo ""
+	@echo "Your ECR Public alias is shown above under repositoryUri."
+	@echo "It looks like: public.ecr.aws/a1b2c3d4/mcpcloud"
+	@echo "Set ECR_PUBLIC_ALIAS=a1b2c3d4 in this Makefile or as an env var."
+
+# ── Build & push ──────────────────────────────────────────────────────────────
 
 ecr-login:
 	aws ecr get-login-password --region $(REGION) | \
 	docker login --username AWS --password-stdin $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com
 
-push: ecr-login
-	docker build --platform linux/amd64 -t a2a-mcp:latest ../../
-	docker tag a2a-mcp:latest $(IMAGE)
-	docker push $(IMAGE)
+ecr-public-login:
+	aws ecr-public get-login-password --region us-east-1 | \
+	docker login --username AWS --password-stdin public.ecr.aws
+
+build:
+	docker build --platform linux/amd64 -t mcpcloud:latest ../../
+
+push-private: ecr-login build
+	docker tag mcpcloud:latest $(PRIVATE_IMG)
+	docker push $(PRIVATE_IMG)
+	@echo "Private image: $(PRIVATE_IMG)"
+
+push-public: ecr-public-login build
+	docker tag mcpcloud:latest $(PUBLIC_IMG)
+	docker push $(PUBLIC_IMG)
 	@echo ""
-	@echo "Pushed: $(IMAGE)"
+	@echo "Public image: $(PUBLIC_IMG)"
+	@echo "Deploy button URL (update README):"
+	@echo "https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://raw.githubusercontent.com/carsor007/mcpcloud/main/deploy/aws/cloudformation.yaml&stackName=mcpcloud"
+
+push: push-public push-private
+
+# ── CloudFormation ────────────────────────────────────────────────────────────
 
 deploy:
 	@test -n "$(VPC_ID)"          || (echo "ERROR: set VPC_ID";          exit 1)
@@ -52,7 +90,7 @@ deploy:
 		--capabilities CAPABILITY_NAMED_IAM \
 		--region $(REGION) \
 		--parameter-overrides \
-			ContainerImage=$(IMAGE) \
+			ContainerImage=$(PUBLIC_IMG) \
 			VpcId=$(VPC_ID) \
 			PublicSubnetIds=$(PUBLIC_SUBNETS) \
 			PrivateSubnetIds=$(PRIVATE_SUBNETS) \
@@ -64,7 +102,7 @@ deploy:
 			$(if $(ANTHROPIC_API_KEY),AnthropicApiKey=$(ANTHROPIC_API_KEY),)
 	@$(MAKE) outputs
 
-update: push
+update: push-public
 	aws ecs update-service \
 		--cluster $(STACK) \
 		--service $(STACK) \

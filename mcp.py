@@ -99,7 +99,7 @@ async def _dispatch(
             _ok(id_, {
                 "protocolVersion": MCP_VERSION,
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "a2a-mcp", "version": "0.1.0"},
+                "serverInfo": {"name": "MCPCloud", "version": "0.1.0"},
             }),
             mcp_sid,
             trace_id,

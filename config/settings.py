@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    SERVICE_NAME: str = "a2a-mcp"
+    SERVICE_NAME: str = "mcpcloud"
     DEBUG_MODE: bool = False
     HOT_RELOAD: bool = False
     ALLOWED_ORIGINS: List[str] = ["*"]

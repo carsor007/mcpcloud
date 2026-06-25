@@ -10,7 +10,7 @@ _HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>a2a-mcp · Tool Browser</title>
+<title>MCPCloud · Tool Browser</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -452,7 +452,7 @@ _HTML = """<!DOCTYPE html>
 <body>
 
 <header>
-  <div class="logo" onclick="showGuide()">a2a<span>-mcp</span></div>
+  <div class="logo" onclick="showGuide()">MCP<span>Cloud</span></div>
   <div class="badge">Tool Browser</div>
   <div class="header-right">
     <button class="guide-btn" onclick="showGuide()">? Guide</button>
@@ -520,10 +520,10 @@ function showGuide() {
 
   $('main').innerHTML = `
     <div class="card">
-      <div class="card-header"><div class="card-title">What is a2a-mcp?</div></div>
+      <div class="card-header"><div class="card-title">What is MCPCloud?</div></div>
       <div class="card-body">
         <p class="guide-intro">
-          <strong>a2a-mcp</strong> is a self-hosted MCP (Model Context Protocol) gateway.
+          <strong>MCPCloud</strong> is a self-hosted MCP (Model Context Protocol) gateway.
           Write any Python function, register it as a skill, and it instantly becomes
           a tool that Claude Desktop, Claude API, Cursor, or any MCP client can call —
           no infrastructure changes, no vendor lock-in.
