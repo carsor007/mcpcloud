@@ -6,7 +6,7 @@ Self-hosted MCP (Model Context Protocol) gateway. Write any Python function, reg
 [![AWS Marketplace](https://img.shields.io/badge/AWS%20Marketplace-Subscribe-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/marketplace)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)](LICENSE)
 
-**Website:** [mcpcloud.dev](https://mcpcloud.dev) · **GitHub:** [carsor007/mcpcloud](https://github.com/carsor007/mcpcloud)
+**Website:** [mcpcloud.dev](https://mcpcloud.dev) · **Demo:** [demo.mcpcloud.dev](https://demo.mcpcloud.dev) · **GitHub:** [carsor007/mcpcloud](https://github.com/carsor007/mcpcloud)
 
 ---
 
