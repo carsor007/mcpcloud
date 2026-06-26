@@ -162,7 +162,7 @@ Resources:
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: MCPCloud ALB — allow inbound HTTP and HTTPS
+      GroupDescription: MCPCloud ALB - allow inbound HTTP and HTTPS
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -177,7 +177,7 @@ Resources:
   TaskSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: MCPCloud ECS tasks — allow inbound from ALB on port 8000
+      GroupDescription: MCPCloud ECS tasks - allow inbound from ALB on port 8000
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -188,7 +188,7 @@ Resources:
   RedisSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: MCPCloud ElastiCache — allow inbound from ECS tasks on port 6379
+      GroupDescription: MCPCloud ElastiCache - allow inbound from ECS tasks on port 6379
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp

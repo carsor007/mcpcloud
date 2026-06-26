@@ -23,7 +23,7 @@ PRIVATE_IMG  := $(PRIVATE_REPO):latest
 
 # Public ECR (gallery.ecr.aws — anyone can pull, no auth required)
 # Replace YOUR_ALIAS with your ECR Public alias after running ecr-public-create
-ECR_PUBLIC_ALIAS ?= YOUR_ALIAS
+ECR_PUBLIC_ALIAS ?= u1x5w2j4
 PUBLIC_REPO      := public.ecr.aws/$(ECR_PUBLIC_ALIAS)/mcpcloud
 PUBLIC_IMG       := $(PUBLIC_REPO):latest
 
