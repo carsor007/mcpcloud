@@ -37,13 +37,49 @@ docker compose up
 
 Open **http://localhost:8000/ui** — the tool browser shows all registered skills.
 
-**Connect Claude Desktop:**
+---
+
+## Connect an MCP client
+
+MCPCloud exposes a config endpoint for every agent type. Use it to generate a ready-to-paste snippet for any MCP client.
+
+### Claude Desktop
+
+1. Install Claude Desktop from [claude.ai/download](https://claude.ai/download)
+2. Get the config snippet for the skills you want:
 
 ```bash
 curl http://localhost:8000/mcp/jira_ops/config
 ```
 
-Paste the returned JSON into `~/Library/Application Support/Claude/claude_desktop_config.json` under `"mcpServers"`. Restart Claude Desktop.
+3. Open (or create) `~/Library/Application Support/Claude/claude_desktop_config.json` and add the returned snippet under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "jira_ops": {
+      "url": "http://localhost:8000/mcp/jira_ops",
+      "transport": "http"
+    },
+    "slack_ops": {
+      "url": "http://localhost:8000/mcp/slack_ops",
+      "transport": "http"
+    }
+  }
+}
+```
+
+4. Restart Claude Desktop. Your skills appear as tools in every conversation.
+
+> **AWS deployment:** replace `http://localhost:8000` with your ALB URL or custom domain (e.g. `https://demo.mcpcloud.dev`).
+
+### Cursor
+
+Add the same JSON to `.cursor/mcp.json` in your project root, or globally at `~/.cursor/mcp.json`. The URL and transport fields are identical.
+
+### Claude API (programmatic)
+
+Pass the MCP server URL when initializing a client session — the endpoint follows the MCP 2025-03-26 spec over HTTP.
 
 ---
 
