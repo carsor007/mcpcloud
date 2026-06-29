@@ -1,0 +1,346 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  MCPCloud — AWS Marketplace Edition.
+  Extends the open-source ECS deployment with a metering sidecar that calls
+  RegisterUsage at startup. AWS Marketplace bills $0.20/hr per ECS task.
+
+# ── Parameters ────────────────────────────────────────────────────────────────
+
+Parameters:
+
+  # Network
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+
+  # Container images
+  # AWS Marketplace replaces these URIs during deployment.
+  CoreImage:
+    Type: String
+    Description: MCPCloud core image (public.ecr.aws/u1x5w2j4/mcpcloud:latest)
+  MeterImage:
+    Type: String
+    Description: MCPCloud metering sidecar image (private Marketplace ECR)
+
+  # Marketplace
+  MarketplaceProductCode:
+    Type: String
+    Default: 44sv6l6c1zh1hxeg6elzdkgba
+    Description: Product code assigned by AWS Marketplace.
+  MarketplacePublicKeyVersion:
+    Type: Number
+    Default: 1
+    Description: Public key version for RegisterUsage signature verification.
+
+  # TLS
+  CertificateArn:
+    Type: String
+    Default: ''
+
+  # Capacity
+  TaskCount:
+    Type: Number
+    Default: 2
+  CacheNodeType:
+    Type: String
+    Default: cache.t4g.micro
+    AllowedValues: [cache.t4g.micro, cache.t4g.small, cache.t4g.medium]
+
+  # Integrations
+  JiraUrl:        { Type: String, Default: '' }
+  JiraEmail:      { Type: String, Default: '' }
+  JiraApiToken:   { Type: String, Default: '', NoEcho: true }
+  JiraProject:    { Type: String, Default: IT }
+  SlackWebhookUrl: { Type: String, Default: '', NoEcho: true }
+  AnthropicApiKey: { Type: String, Default: '', NoEcho: true }
+  OpenAiApiKey:    { Type: String, Default: '', NoEcho: true }
+
+# ── Conditions ────────────────────────────────────────────────────────────────
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+
+# ── Resources ─────────────────────────────────────────────────────────────────
+
+Resources:
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${AWS::StackName}'
+      RetentionInDays: 30
+
+  AppSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}/credentials'
+      SecretString: !Sub |
+        {
+          "JIRA_API_TOKEN":     "${JiraApiToken}",
+          "SLACK_WEBHOOK_URL":  "${SlackWebhookUrl}",
+          "ANTHROPIC_API_KEY":  "${AnthropicApiKey}",
+          "OPENAI_API_KEY":     "${OpenAiApiKey}"
+        }
+
+  # ── IAM ───────────────────────────────────────────────────────────────────────
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-task-execution'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref AppSecrets
+
+  # Task role — attached to running containers (not just the execution agent).
+  # Required for RegisterUsage — the metering sidecar uses this credential.
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-task'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MarketplaceMeter
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: aws-marketplace:RegisterUsage
+                Resource: '*'
+
+  # ── ECS Cluster ───────────────────────────────────────────────────────────────
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${AWS::StackName}'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  # ── Security Groups ───────────────────────────────────────────────────────────
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MCPCloud ALB - allow inbound HTTP and HTTPS
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80,  ToPort: 80,  CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+
+  TaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MCPCloud ECS tasks - allow inbound from ALB on port 8000
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MCPCloud ElastiCache - allow inbound from ECS tasks
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref TaskSecurityGroup
+
+  # ── ElastiCache Redis ─────────────────────────────────────────────────────────
+
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Subnets for MCPCloud Redis
+      SubnetIds: !Ref PrivateSubnetIds
+
+  Redis:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupDescription: MCPCloud session tracking
+      AutomaticFailoverEnabled: false
+      NumCacheClusters: 1
+      CacheNodeType: !Ref CacheNodeType
+      Engine: redis
+      EngineVersion: '7.1'
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      SecurityGroupIds: [!Ref RedisSecurityGroup]
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: false
+
+  # ── Load Balancer ─────────────────────────────────────────────────────────────
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      Subnets: !Ref PublicSubnetIds
+      SecurityGroups: [!Ref AlbSecurityGroup]
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 8000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - { Key: deregistration_delay.timeout_seconds, Value: '30' }
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - !If
+          - HasCertificate
+          - Type: redirect
+            RedirectConfig: { Protocol: HTTPS, Port: '443', StatusCode: HTTP_301 }
+          - Type: forward
+            TargetGroupArn: !Ref TargetGroup
+
+  HttpsListener:
+    Condition: HasCertificate
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates: [{ CertificateArn: !Ref CertificateArn }]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ── ECS Task — two containers ─────────────────────────────────────────────────
+  #
+  # mcpcloud  — open-source core (public ECR)
+  # meter     — Marketplace metering sidecar (private ECR)
+  #
+  # Both are Essential=true. If the meter sidecar exits (e.g. CustomerNotEntitled),
+  # ECS terminates the entire task, blocking access to the core app.
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${AWS::StackName}'
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+
+        # ── Core app ─────────────────────────────────────────────────────────────
+        - Name: mcpcloud
+          Image: !Ref CoreImage
+          Essential: true
+          PortMappings:
+            - { ContainerPort: 8000, Protocol: tcp }
+          Environment:
+            - { Name: REDIS_URL,    Value: !Sub 'redis://${Redis.PrimaryEndPoint.Address}:${Redis.PrimaryEndPoint.Port}' }
+            - { Name: JIRA_URL,     Value: !Ref JiraUrl }
+            - { Name: JIRA_EMAIL,   Value: !Ref JiraEmail }
+            - { Name: JIRA_PROJECT, Value: !Ref JiraProject }
+          Secrets:
+            - { Name: JIRA_API_TOKEN,    ValueFrom: !Sub '${AppSecrets}:JIRA_API_TOKEN::' }
+            - { Name: SLACK_WEBHOOK_URL,  ValueFrom: !Sub '${AppSecrets}:SLACK_WEBHOOK_URL::' }
+            - { Name: ANTHROPIC_API_KEY,  ValueFrom: !Sub '${AppSecrets}:ANTHROPIC_API_KEY::' }
+            - { Name: OPENAI_API_KEY,     ValueFrom: !Sub '${AppSecrets}:OPENAI_API_KEY::' }
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: mcpcloud
+          HealthCheck:
+            Command: [CMD-SHELL, 'wget -q -O- http://localhost:8000/health || exit 1']
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 15
+
+        # ── Metering sidecar ─────────────────────────────────────────────────────
+        # Calls RegisterUsage at startup. If CustomerNotEntitledException → exits 1
+        # → ECS kills the entire task. AWS meters $0.20/hr automatically.
+        - Name: meter
+          Image: !Ref MeterImage
+          Essential: true
+          Environment:
+            - { Name: MARKETPLACE_PRODUCT_CODE,       Value: !Ref MarketplaceProductCode }
+            - { Name: MARKETPLACE_PUBLIC_KEY_VERSION,  Value: !Ref MarketplacePublicKeyVersion }
+            - { Name: AWS_DEFAULT_REGION,              Value: !Ref AWS::Region }
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: meter
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: [HttpListener]
+    Properties:
+      ServiceName: !Sub '${AWS::StackName}'
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref TaskCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups: [!Ref TaskSecurityGroup]
+      LoadBalancers:
+        - ContainerName: mcpcloud
+          ContainerPort: 8000
+          TargetGroupArn: !Ref TargetGroup
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 50
+        MaximumPercent: 200
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+
+Outputs:
+  Endpoint:
+    Value: !If [HasCertificate, !Sub 'https://${LoadBalancer.DNSName}', !Sub 'http://${LoadBalancer.DNSName}']
+  MCPEndpoint:
+    Value: !If [HasCertificate, !Sub 'https://${LoadBalancer.DNSName}/mcp', !Sub 'http://${LoadBalancer.DNSName}/mcp']
+  UIEndpoint:
+    Value: !If [HasCertificate, !Sub 'https://${LoadBalancer.DNSName}/ui', !Sub 'http://${LoadBalancer.DNSName}/ui']
+  SecretsArn:
+    Value: !Ref AppSecrets
