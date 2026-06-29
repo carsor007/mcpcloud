@@ -16,24 +16,25 @@ Parameters:
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
 
-  # Container images
-  # AWS Marketplace replaces these URIs during deployment.
+  # Container images — pre-filled, no action required
   CoreImage:
     Type: String
-    Description: MCPCloud core image (public.ecr.aws/u1x5w2j4/mcpcloud:latest)
+    Default: '709825985650.dkr.ecr.us-east-1.amazonaws.com/a2agateway/mcpcloud:v1.0.1'
+    Description: 'MCPCloud core image — do not change'
   MeterImage:
     Type: String
-    Description: MCPCloud metering sidecar image (private Marketplace ECR)
+    Default: '709825985650.dkr.ecr.us-east-1.amazonaws.com/a2agateway/mcpcloud-meter:v1.0.1'
+    Description: 'MCPCloud metering sidecar — do not change'
 
-  # Marketplace
+  # Marketplace — pre-filled, no action required
   MarketplaceProductCode:
     Type: String
     Default: 44sv6l6c1zh1hxeg6elzdkgba
-    Description: Product code assigned by AWS Marketplace.
+    Description: 'AWS Marketplace product code — do not change'
   MarketplacePublicKeyVersion:
     Type: Number
     Default: 1
-    Description: Public key version for RegisterUsage signature verification.
+    Description: 'RegisterUsage public key version — do not change'
 
   # TLS
   CertificateArn:
