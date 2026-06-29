@@ -11,10 +11,10 @@ Parameters:
   # Network
   VpcId:
     Type: AWS::EC2::VPC::Id
-  PublicSubnetIds:
+    Description: 'The VPC to deploy MCPCloud into'
+  SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
-  PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'Select 2 or more subnets in different Availability Zones'
 
   # Container images — pre-filled, no action required
   CoreImage:
@@ -179,7 +179,7 @@ Resources:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
       Description: Subnets for MCPCloud Redis
-      SubnetIds: !Ref PrivateSubnetIds
+      SubnetIds: !Ref SubnetIds
 
   Redis:
     Type: AWS::ElastiCache::ReplicationGroup
@@ -202,7 +202,7 @@ Resources:
     Properties:
       Type: application
       Scheme: internet-facing
-      Subnets: !Ref PublicSubnetIds
+      Subnets: !Ref SubnetIds
       SecurityGroups: [!Ref AlbSecurityGroup]
 
   TargetGroup:
@@ -324,7 +324,7 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
-          Subnets: !Ref PrivateSubnetIds
+          Subnets: !Ref SubnetIds
           SecurityGroups: [!Ref TaskSecurityGroup]
       LoadBalancers:
         - ContainerName: mcpcloud
