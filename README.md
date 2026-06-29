@@ -3,7 +3,7 @@
 Self-hosted MCP (Model Context Protocol) gateway. Write any Python function, register it as a skill, and it instantly becomes a tool that Claude Desktop, Claude API, Cursor, or any MCP-compatible client can call.
 
 [![Deploy to AWS](https://img.shields.io/badge/Deploy%20to%20AWS-ECS%20Fargate-FF9900?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://raw.githubusercontent.com/carsor007/mcpcloud/main/deploy/aws/cloudformation.yaml&stackName=mcpcloud)
-[![AWS Marketplace](https://img.shields.io/badge/AWS%20Marketplace-Subscribe-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/marketplace)
+[![AWS Marketplace](https://img.shields.io/badge/AWS%20Marketplace-Subscribe-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/marketplace/pp/prodview-6ujgmfv3k42hu)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)](LICENSE)
 
 **Website:** [mcpcloud.dev](https://mcpcloud.dev) · **Demo:** [demo.mcpcloud.dev](https://demo.mcpcloud.dev) · **GitHub:** [carsor007/mcpcloud](https://github.com/carsor007/mcpcloud)
@@ -201,4 +201,4 @@ ECR_PUBLIC_ALIAS=your_alias make push-public
 
 Apache 2.0 — see [LICENSE](LICENSE).
 
-Free to self-host. Managed deployment available on [AWS Marketplace](https://aws.amazon.com/marketplace).
+Free to self-host. Managed deployment available on [AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-6ujgmfv3k42hu).
