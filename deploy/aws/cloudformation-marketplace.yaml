@@ -36,28 +36,56 @@ Parameters:
     Default: 1
     Description: 'RegisterUsage public key version — do not change'
 
-  # TLS
+  # TLS — optional, leave blank for HTTP only
   CertificateArn:
     Type: String
     Default: ''
+    Description: '(Optional) ACM certificate ARN for HTTPS. Leave blank to use HTTP.'
 
   # Capacity
   TaskCount:
     Type: Number
     Default: 2
+    Description: 'Number of ECS tasks to run (minimum 1)'
   CacheNodeType:
     Type: String
     Default: cache.t4g.micro
     AllowedValues: [cache.t4g.micro, cache.t4g.small, cache.t4g.medium]
+    Description: 'Redis cache node size'
 
-  # Integrations
-  JiraUrl:        { Type: String, Default: '' }
-  JiraEmail:      { Type: String, Default: '' }
-  JiraApiToken:   { Type: String, Default: '', NoEcho: true }
-  JiraProject:    { Type: String, Default: IT }
-  SlackWebhookUrl: { Type: String, Default: '', NoEcho: true }
-  AnthropicApiKey: { Type: String, Default: '', NoEcho: true }
-  OpenAiApiKey:    { Type: String, Default: '', NoEcho: true }
+  # Integrations — all optional, add only what you need
+  JiraUrl:
+    Type: String
+    Default: ''
+    Description: '(Optional) Jira instance URL e.g. https://yourcompany.atlassian.net'
+  JiraEmail:
+    Type: String
+    Default: ''
+    Description: '(Optional) Jira account email'
+  JiraApiToken:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: '(Optional) Jira API token'
+  JiraProject:
+    Type: String
+    Default: ''
+    Description: '(Optional) Jira project key e.g. ENG'
+  SlackWebhookUrl:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: '(Optional) Slack incoming webhook URL'
+  AnthropicApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: '(Optional) Anthropic API key for Claude-powered skills'
+  OpenAiApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: '(Optional) OpenAI API key for GPT-powered skills'
 
 # ── Conditions ────────────────────────────────────────────────────────────────
 
