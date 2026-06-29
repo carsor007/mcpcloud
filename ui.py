@@ -455,6 +455,7 @@ _HTML = """<!DOCTYPE html>
   <div class="logo" onclick="showGuide()">MCP<span>Cloud</span></div>
   <div class="badge">Tool Browser</div>
   <div class="header-right">
+    <a href="/ui/skills" class="guide-btn" style="text-decoration:none">+ Skill Editor</a>
     <button class="guide-btn" onclick="showGuide()">? Guide</button>
     <div class="status">
       <div class="dot" id="status-dot"></div>
@@ -478,33 +479,111 @@ let allTools = []
 let activeToolName = null
 
 // ── Skill file template ───────────────────────────────────────────────────────
-const SKILL_TEMPLATE = `# skills/my_tools.py
+const SKILL_TEMPLATE = `# skills/servicenow_ops.py
+import os, httpx
 from registry import SkillResult, get_registry
 
-async def my_skill(input: dict, context: dict) -> SkillResult:
-    \'\'\'One-line description shown in this UI.\'\'\'
-    value = input.get("text", "")
-    return SkillResult(success=True, output={"result": value.upper()})
+# Credentials loaded from .env at startup — never hard-coded
+_BASE = os.getenv("SNOW_URL", "")    # https://company.service-now.com
+_AUTH = (os.getenv("SNOW_USER", ""), os.getenv("SNOW_PASS", ""))
+
+async def get_incident(input: dict, context: dict) -> SkillResult:
+    \'\'\'Fetch a ServiceNow incident by number and return its state and priority.\'\'\'
+    number = input.get("number", "")
+    async with httpx.AsyncClient() as c:
+        r = await c.get(
+            f"{_BASE}/api/now/table/incident",
+            auth=_AUTH,
+            params={"sysparm_query": f"number={number}",
+                    "sysparm_fields": "number,short_description,state,priority,assigned_to"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        items = r.json().get("result", [])
+    if not items:
+        return SkillResult(success=False, output={}, error=f"{number} not found")
+    inc = items[0]
+    return SkillResult(success=True, output={
+        "number":      inc["number"],
+        "summary":     inc["short_description"],
+        "state":       inc["state"],
+        "priority":    inc["priority"],
+        "assigned_to": inc.get("assigned_to", {}).get("display_value", "Unassigned"),
+    })
 
 def register_all():
     get_registry().register(
-        "my_tools",     # agent type  →  groups skills in the sidebar
-        "my_skill",     # skill name  →  shown under the group
-        my_skill,
+        "servicenow",       # agent type  →  groups skills in the sidebar
+        "get_incident",     # skill name  →  shown under the group
+        get_incident,
         schema={
             "type": "object",
-            "required": ["text"],
+            "required": ["number"],
             "properties": {
-                "text": {"type": "string", "description": "Input text"}
+                "number": {"type": "string", "description": "Incident number, e.g. INC0012345"}
             }
         }
     )`
 
+// ── Auth pattern snippets ─────────────────────────────────────────────────────
+const AUTH_BEARER = `# .env
+ACME_API_TOKEN=sk-your-token-here
+
+# skills/acme_ops.py
+import os, httpx
+from registry import SkillResult, get_registry
+
+_TOKEN = os.getenv("ACME_API_TOKEN", "")
+
+async def list_items(input: dict, context: dict) -> SkillResult:
+    \'\'\'List items from the Acme API.\'\'\'
+    async with httpx.AsyncClient() as c:
+        r = await c.get(
+            "https://api.acme.com/v1/items",
+            headers={"Authorization": f"Bearer {_TOKEN}"},
+            timeout=10,
+        )
+        r.raise_for_status()
+    return SkillResult(success=True, output=r.json())`
+
+const AUTH_EMAIL_TOKEN = `# .env  —  Jira / Atlassian
+JIRA_URL=https://company.atlassian.net
+JIRA_EMAIL=svc-mcpcloud@company.com   # service account email
+JIRA_API_TOKEN=ATATT...               # id.atlassian.com → Security → API tokens
+
+# skills/jira_ops.py
+import os, httpx
+
+_URL  = os.getenv("JIRA_URL", "")
+_AUTH = (os.getenv("JIRA_EMAIL", ""), os.getenv("JIRA_API_TOKEN", ""))
+
+# HTTP Basic auth — Atlassian accepts email:api_token as the credential pair
+async with httpx.AsyncClient() as c:
+    r = await c.post(f"{_URL}/rest/api/2/issue", auth=_AUTH, json={...})`
+
+const AUTH_SERVICE_ACCOUNT = `# .env  —  ServiceNow / SAP / internal APIs
+SNOW_URL=https://company.service-now.com
+SNOW_USER=svc-mcpcloud       # dedicated service account, not a personal login
+SNOW_PASS=strong-random-password
+
+# skills/servicenow_ops.py
+import os, httpx
+
+_BASE = os.getenv("SNOW_URL", "")
+_AUTH = (os.getenv("SNOW_USER", ""), os.getenv("SNOW_PASS", ""))
+
+async with httpx.AsyncClient() as c:
+    r = await c.get(f"{_BASE}/api/now/table/incident", auth=_AUTH, params={...})
+
+# Same pattern works for SAP, Oracle, and most internal REST APIs.
+# On AWS: store credentials in Secrets Manager and inject via ECS task definition.
+# The skill code is identical — os.getenv() works the same either way.`
+
 const CLAUDE_CONFIG = () => `// ~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
-    "my_tools": {
-      "url": "${origin}/mcp/my_tools",
+    "servicenow": {
+      "url": "${origin}/mcp/servicenow",
       "transport": "http"
     }
   }
@@ -602,6 +681,49 @@ function showGuide() {
     </div>
 
     <div class="card">
+      <div class="card-header"><div class="card-title">Credentials &amp; auth patterns</div></div>
+      <div class="card-body">
+        <p class="guide-intro" style="margin-bottom:18px">
+          Store all secrets in <strong>.env</strong> and read them with <code>os.getenv()</code>
+          at module load time. Three patterns cover the vast majority of enterprise and SaaS APIs.
+        </p>
+
+        <div style="margin-bottom:20px">
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">Pattern 1 — Bearer token</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">
+            Slack, Linear, Notion, GitHub, and most modern REST APIs. One token, passed in the <code>Authorization</code> header.
+          </div>
+          <div class="code-wrap">
+            <div class="code-block" id="cb-auth1">${escHtml(AUTH_BEARER)}</div>
+            <button class="copy-btn" onclick="copy('cb-auth1', this)">Copy</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px">
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">Pattern 2 — Email + API token</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">
+            Jira, Confluence, and other Atlassian tools. HTTP Basic auth using a service account email paired with an API token (not a password).
+          </div>
+          <div class="code-wrap">
+            <div class="code-block" id="cb-auth2">${escHtml(AUTH_EMAIL_TOKEN)}</div>
+            <button class="copy-btn" onclick="copy('cb-auth2', this)">Copy</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:4px">
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">Pattern 3 — Service account (username + password)</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">
+            ServiceNow, SAP, Oracle, and internal APIs. Use a dedicated service account — not a personal login — so access survives staff changes and can be audited independently.
+          </div>
+          <div class="code-wrap">
+            <div class="code-block" id="cb-auth3">${escHtml(AUTH_SERVICE_ACCOUNT)}</div>
+            <button class="copy-btn" onclick="copy('cb-auth3', this)">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-header"><div class="card-title">Connect an MCP client</div></div>
       <div class="card-body">
         <div class="steps">
@@ -612,7 +734,7 @@ function showGuide() {
               <div class="step-body">
                 Each agent type has a ready-to-paste config endpoint:<br>
                 <code>GET /mcp/{agent_type}/config</code><br><br>
-                For example: <code>GET ${origin}/mcp/text_analysis/config</code>
+                For example: <code>GET ${origin}/mcp/servicenow/config</code>
               </div>
             </div>
           </div>
@@ -636,7 +758,7 @@ function showGuide() {
               <div class="step-title">All tools available immediately</div>
               <div class="step-body">
                 Claude can now call your registered skills as tools in any conversation.<br><br>
-                Scope to one agent type: <code>${origin}/mcp/text_analysis</code><br>
+                Scope to one agent type: <code>${origin}/mcp/servicenow</code><br>
                 Expose everything: <code>${origin}/mcp</code>
               </div>
             </div>
@@ -845,3 +967,365 @@ loadTools()
 @router.get("", response_class=HTMLResponse, include_in_schema=False)
 async def tool_browser():
     return HTMLResponse(_HTML)
+
+
+_SKILLS_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCPCloud · Skill Editor</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #222636;
+    --border: #2e3248; --accent: #6c63ff; --accent-dim: #3d3880;
+    --text: #e2e4f0; --text-dim: #7c82a8;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+    --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; color: var(--text); text-decoration: none; }
+  .logo span { color: var(--accent); }
+  .badge { background: var(--accent-dim); color: var(--accent); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .nav-link { background: none; border: 1px solid var(--border); color: var(--text-dim); border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; transition: border-color 0.15s, color 0.15s; }
+  .nav-link:hover { border-color: var(--accent); color: var(--accent); }
+
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar { width: 220px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .sidebar-header span { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-dim); flex: 1; }
+  .new-btn { background: var(--accent); color: #fff; border: none; border-radius: 5px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .new-btn:hover { opacity: 0.88; }
+  .skill-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .skill-group-label { padding: 10px 14px 3px; font-size: 10px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: var(--text-dim); }
+  .skill-item { padding: 7px 14px; cursor: pointer; font-size: 13px; color: var(--text-dim); border-left: 2px solid transparent; transition: background 0.1s, color 0.1s; }
+  .skill-item:hover { background: var(--surface2); color: var(--text); }
+  .skill-item.active { background: var(--surface2); color: var(--accent); border-left-color: var(--accent); }
+  .skill-item .loaded-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-left: 6px; vertical-align: middle; }
+
+  /* Editor area */
+  .editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .editor-toolbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .toolbar-field { display: flex; flex-direction: column; gap: 3px; }
+  .toolbar-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
+  .toolbar-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 5px; padding: 5px 10px; font-size: 12px; font-family: var(--mono); width: 140px; }
+  .toolbar-input:focus { outline: none; border-color: var(--accent); }
+  .toolbar-sep { width: 1px; height: 32px; background: var(--border); margin: 0 4px; }
+  .save-btn { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .save-btn:hover { opacity: 0.88; }
+  .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .del-btn { background: none; border: 1px solid var(--border); color: var(--red); border-radius: 6px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+  .del-btn:hover { border-color: var(--red); background: rgba(248,113,113,0.08); }
+  .status-msg { font-size: 12px; margin-left: 8px; }
+  .status-msg.ok { color: var(--green); }
+  .status-msg.err { color: var(--red); }
+
+  #monaco-container { flex: 1; }
+
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-dim); }
+  .empty-state h3 { color: var(--text); font-size: 16px; }
+  .empty-state p { font-size: 13px; text-align: center; max-width: 320px; line-height: 1.6; }
+
+  .logs-panel { flex-shrink: 0; height: 160px; border-top: 1px solid var(--border); background: #0a0c12; display: flex; flex-direction: column; overflow: hidden; }
+  .logs-header { padding: 6px 14px; font-size: 10px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: var(--text-dim); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .logs-header span { flex: 1; }
+  .logs-clear { background: none; border: none; color: var(--text-dim); font-size: 10px; cursor: pointer; padding: 0; }
+  .logs-clear:hover { color: var(--text); }
+  .logs-body { flex: 1; overflow-y: auto; padding: 6px 0; font-family: var(--mono); font-size: 11px; }
+  .log-row { display: flex; align-items: baseline; gap: 10px; padding: 3px 14px; line-height: 1.4; }
+  .log-row:hover { background: rgba(255,255,255,0.03); }
+  .log-ts { color: var(--text-dim); flex-shrink: 0; }
+  .log-ok { color: var(--green); flex-shrink: 0; }
+  .log-err { color: var(--red); flex-shrink: 0; }
+  .log-msg { color: #a9b1d6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-msg.err { color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/ui" class="logo">MCP<span>Cloud</span></a>
+  <div class="badge">Skill Editor</div>
+  <div class="header-right">
+    <a href="/ui" class="nav-link">← Tool Browser</a>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <span>Skills</span>
+      <button class="new-btn" onclick="newSkill()">+ New</button>
+    </div>
+    <div class="skill-list" id="skill-list">
+      <div style="padding:12px 14px;color:var(--text-dim);font-size:12px">Loading…</div>
+    </div>
+  </nav>
+
+  <div class="editor-area">
+    <div class="editor-toolbar" id="toolbar" style="display:none">
+      <div class="toolbar-field">
+        <div class="toolbar-label">Agent Type</div>
+        <input class="toolbar-input" id="inp-agent" placeholder="e.g. jira_ops" spellcheck="false">
+      </div>
+      <div class="toolbar-field">
+        <div class="toolbar-label">Skill Name</div>
+        <input class="toolbar-input" id="inp-skill" placeholder="e.g. create_ticket" spellcheck="false">
+      </div>
+      <div class="toolbar-sep"></div>
+      <button class="save-btn" onclick="saveSkill()" id="save-btn">Save</button>
+      <button class="del-btn" id="del-btn" onclick="deleteSkill()" style="display:none">Delete</button>
+      <span class="status-msg" id="status-msg"></span>
+    </div>
+    <div id="monaco-container"></div>
+    <div class="logs-panel" id="logs-panel" style="display:none">
+      <div class="logs-header">
+        <span>Execution Log</span>
+        <button class="logs-clear" onclick="clearLogs()">clear</button>
+      </div>
+      <div class="logs-body" id="logs-body"></div>
+    </div>
+    <div class="empty-state" id="empty-state">
+      <h3>Skill Editor</h3>
+      <p>Write Python skills that any MCP client can call as tools. Each skill is an async function — save it and it's live instantly.</p>
+      <button class="new-btn" style="padding:8px 20px;font-size:13px" onclick="newSkill()">+ New Skill</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script>
+let editor = null
+let skills = []
+let activeKey = null
+let isNew = false
+
+require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } })
+require(['vs/editor/editor.main'], function() {
+  editor = monaco.editor.create(document.getElementById('monaco-container'), {
+    language: 'python',
+    theme: 'vs-dark',
+    fontSize: 13,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    lineNumbers: 'on',
+    padding: { top: 12 },
+    automaticLayout: true,
+  })
+  loadSkills()
+})
+
+async function loadSkills() {
+  const res = await fetch('/api/skills')
+  const data = await res.json()
+  skills = data.skills || []
+  renderSidebar()
+}
+
+function renderSidebar() {
+  const el = document.getElementById('skill-list')
+  if (!skills.length) {
+    el.innerHTML = '<div style="padding:12px 14px;color:var(--text-dim);font-size:12px">No skills yet. Click + New.</div>'
+    return
+  }
+  const groups = {}
+  for (const s of skills) {
+    if (!groups[s.agent_type]) groups[s.agent_type] = []
+    groups[s.agent_type].push(s)
+  }
+  let html = ''
+  for (const [at, list] of Object.entries(groups)) {
+    html += `<div class="skill-group-label">${at}</div>`
+    for (const s of list) {
+      const key = `${s.agent_type}:${s.skill_name}`
+      const active = key === activeKey ? ' active' : ''
+      const dot = s.loaded ? '<span class="loaded-dot" title="Loaded"></span>' : ''
+      html += `<div class="skill-item${active}" id="item-${key}" onclick="openSkill('${s.agent_type}','${s.skill_name}')">${s.skill_name}${dot}</div>`
+    }
+  }
+  el.innerHTML = html
+}
+
+async function openSkill(agentType, skillName) {
+  const res = await fetch(`/api/skills/${agentType}/${skillName}`)
+  const data = await res.json()
+
+  activeKey = `${agentType}:${skillName}`
+  isNew = false
+
+  document.getElementById('inp-agent').value = agentType
+  document.getElementById('inp-skill').value = skillName
+  document.getElementById('inp-agent').readOnly = true
+  document.getElementById('inp-skill').readOnly = true
+  document.getElementById('del-btn').style.display = 'inline-block'
+  document.getElementById('toolbar').style.display = 'flex'
+  document.getElementById('empty-state').style.display = 'none'
+  document.getElementById('status-msg').textContent = ''
+
+  editor.setValue(data.code)
+  editor.setScrollPosition({ scrollTop: 0 })
+  renderSidebar()
+}
+
+async function newSkill() {
+  const res = await fetch('/api/skills/template?skill_name=my_skill')
+  const data = await res.json()
+
+  activeKey = null
+  isNew = true
+
+  document.getElementById('inp-agent').value = ''
+  document.getElementById('inp-skill').value = ''
+  document.getElementById('inp-agent').readOnly = false
+  document.getElementById('inp-skill').readOnly = false
+  document.getElementById('del-btn').style.display = 'none'
+  document.getElementById('toolbar').style.display = 'flex'
+  document.getElementById('empty-state').style.display = 'none'
+  document.getElementById('status-msg').textContent = ''
+
+  editor.setValue(data.code)
+  editor.setScrollPosition({ scrollTop: 0 })
+  document.getElementById('inp-agent').focus()
+  renderSidebar()
+}
+
+async function saveSkill() {
+  const agentType = document.getElementById('inp-agent').value.trim()
+  const skillName = document.getElementById('inp-skill').value.trim()
+  const code = editor.getValue()
+  const btn = document.getElementById('save-btn')
+  const msg = document.getElementById('status-msg')
+
+  if (!agentType || !skillName) {
+    msg.className = 'status-msg err'
+    msg.textContent = 'Agent type and skill name are required'
+    return
+  }
+
+  btn.disabled = true
+  btn.textContent = 'Saving…'
+  msg.textContent = ''
+
+  try {
+    const res = await fetch('/api/skills', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_type: agentType, skill_name: skillName, code })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Save failed')
+
+    msg.className = 'status-msg ok'
+    msg.textContent = '✓ Saved and loaded'
+    activeKey = `${data.agent_type}:${data.skill_name}`
+    isNew = false
+
+    document.getElementById('inp-agent').value = data.agent_type
+    document.getElementById('inp-skill').value = data.skill_name
+    document.getElementById('inp-agent').readOnly = true
+    document.getElementById('inp-skill').readOnly = true
+    document.getElementById('del-btn').style.display = 'inline-block'
+
+    await loadSkills()
+  } catch(e) {
+    msg.className = 'status-msg err'
+    msg.textContent = '✗ ' + e.message
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Save'
+  }
+}
+
+async function deleteSkill() {
+  if (!activeKey) return
+  const [at, sn] = activeKey.split(':')
+  if (!confirm(`Delete ${at}:${sn}? This cannot be undone.`)) return
+
+  const res = await fetch(`/api/skills/${at}/${sn}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const data = await res.json()
+    alert(data.detail || 'Delete failed')
+    return
+  }
+
+  stopLogsPoller()
+  activeKey = null
+  isNew = false
+  editor.setValue('')
+  document.getElementById('toolbar').style.display = 'none'
+  document.getElementById('logs-panel').style.display = 'none'
+  document.getElementById('empty-state').style.display = 'flex'
+  await loadSkills()
+}
+
+// ── Execution log panel ───────────────────────────────────────────────────────
+let logsPoller = null
+
+function startLogsPoller() {
+  stopLogsPoller()
+  refreshLogs()
+  logsPoller = setInterval(refreshLogs, 3000)
+}
+
+function stopLogsPoller() {
+  if (logsPoller) { clearInterval(logsPoller); logsPoller = null }
+}
+
+async function refreshLogs() {
+  if (!activeKey) return
+  const [at, sn] = activeKey.split(':')
+  const res = await fetch(`/api/skills/${at}/${sn}/logs`)
+  if (!res.ok) return
+  const data = await res.json()
+  renderLogs(data.logs || [])
+}
+
+function renderLogs(logs) {
+  const body = document.getElementById('logs-body')
+  if (!logs.length) {
+    body.innerHTML = '<div style="padding:6px 14px;color:var(--text-dim)">No executions yet — run the tool from the Tool Browser.</div>'
+    return
+  }
+  body.innerHTML = logs.map(l => {
+    const t = new Date(l.ts * 1000)
+    const ts = t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})
+    const badge = l.success
+      ? '<span class="log-ok">✓ ok</span>'
+      : '<span class="log-err">✗ err</span>'
+    const msg = l.error
+      ? `<span class="log-msg err">${escHtml(l.error.slice(0, 200))}</span>`
+      : '<span class="log-msg">success</span>'
+    return `<div class="log-row"><span class="log-ts">${ts}</span>${badge}${msg}</div>`
+  }).join('')
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
+function clearLogs() {
+  document.getElementById('logs-body').innerHTML =
+    '<div style="padding:6px 14px;color:var(--text-dim)">Cleared — new runs will appear here.</div>'
+}
+
+// Show logs panel when a skill is opened
+const _origOpen = openSkill
+openSkill = async function(at, sn) {
+  await _origOpen(at, sn)
+  document.getElementById('logs-panel').style.display = 'flex'
+  document.getElementById('logs-panel').style.flexDirection = 'column'
+  startLogsPoller()
+}
+</script>
+</body>
+</html>"""
+
+
+@router.get("/skills", response_class=HTMLResponse, include_in_schema=False)
+async def skill_editor():
+    return HTMLResponse(_SKILLS_HTML)

@@ -64,7 +64,7 @@ def _build_tools(agent_type: Optional[str]) -> List[Dict[str, Any]]:
             schema = registry.get_schema(at, skill_name)
             tools.append({
                 "name": f"{at}{TOOL_SEP}{skill_name}",
-                "description": (fn.__doc__ or "").strip().splitlines()[0],
+                "description": ((fn.__doc__ or "").strip().splitlines() or ["No description"])[0],
                 "inputSchema": schema,
             })
     return tools
@@ -141,6 +141,10 @@ async def _dispatch(
             is_error = True
 
         logger.info("Tool result", tool=tool_name, success=not is_error, trace_id=trace_id)
+
+        import asyncio
+        from skills_store import append_log
+        asyncio.create_task(append_log(at, skill_name, not is_error, content_text if is_error else None))
 
         return (
             _ok(id_, {

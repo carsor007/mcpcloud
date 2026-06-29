@@ -14,6 +14,7 @@ from config.settings import get_settings
 from mcp import router as mcp_router
 from session import get_tracker
 from shared.logging import setup_logging
+from skills_api import router as skills_router
 from ui import router as ui_router
 
 setup_logging()
@@ -25,6 +26,8 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     import skills
     skills.register_all()
+    from skills.dynamic import load_all as load_dynamic
+    await load_dynamic()
     logger.info("MCPCloud started", redis=bool(settings.REDIS_URL))
     yield
     await get_tracker().close()
@@ -56,6 +59,7 @@ async def health():
 
 app.include_router(mcp_router, prefix="/mcp", tags=["mcp"])
 app.include_router(ui_router, prefix="/ui", tags=["ui"])
+app.include_router(skills_router, prefix="/api/skills", tags=["skills"])
 
 
 if __name__ == "__main__":
