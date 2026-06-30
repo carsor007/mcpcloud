@@ -25,7 +25,11 @@ Every Python function registered as a skill becomes an MCP tool. No vendor lock-
 
 ## Quickstart
 
-**Run locally with Docker:**
+### Deploy to Cloud
+
+Subscribe on [AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-6ujgmfv3k42hu) for a fully managed deployment on ECS Fargate — no Docker, no ECR setup, no servers to manage. Includes a 7-day free trial.
+
+### Run locally with Docker
 
 ```bash
 git clone https://github.com/carsor007/mcpcloud.git
@@ -135,21 +139,6 @@ Configure by setting `JIRA_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` in `.env`.
 | `alert` | Send an urgent alert with severity badge — critical sends `@channel` |
 
 Configure by setting `SLACK_WEBHOOK_URL` in `.env`.
-
----
-
-## Deploy to AWS
-
-Subscribe on [AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-6ujgmfv3k42hu) for a fully managed deployment on ECS Fargate. One-click CloudFormation launch — no Docker, no ECR setup required.
-
-It provisions:
-
-- **ECS Fargate** — 2 tasks, no EC2 to manage
-- **ElastiCache Redis** — session tracking across workers (~$15/month for t4g.micro)
-- **Application Load Balancer** — with optional HTTPS via ACM
-- **Secrets Manager** — stores Jira, Slack, and API credentials securely
-
-Pricing: **$0.20/hr** per ECS task, with a 7-day free trial.
 
 ---
 
