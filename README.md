@@ -2,7 +2,6 @@
 
 Self-hosted MCP (Model Context Protocol) gateway. Write any Python function, register it as a skill, and it instantly becomes a tool that Claude Desktop, Claude API, Cursor, or any MCP-compatible client can call.
 
-[![Deploy to AWS](https://img.shields.io/badge/Deploy%20to%20AWS-ECS%20Fargate-FF9900?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://raw.githubusercontent.com/carsor007/mcpcloud/main/deploy/aws/cloudformation.yaml&stackName=mcpcloud)
 [![AWS Marketplace](https://img.shields.io/badge/AWS%20Marketplace-Subscribe-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/marketplace/pp/prodview-6ujgmfv3k42hu)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)](LICENSE)
 
@@ -71,7 +70,7 @@ curl http://localhost:8000/mcp/jira_ops/config
 
 4. Restart Claude Desktop. Your skills appear as tools in every conversation.
 
-> **AWS deployment:** replace `http://localhost:8000` with your ALB URL or custom domain (e.g. `https://demo.mcpcloud.dev`).
+> **Cloud deployment:** replace `http://localhost:8000` with your MCPCloud URL (e.g. `https://demo.mcpcloud.dev`).
 
 ### Cursor
 
@@ -141,7 +140,7 @@ Configure by setting `SLACK_WEBHOOK_URL` in `.env`.
 
 ## Deploy to AWS
 
-The **Deploy to AWS** button above launches a CloudFormation stack in your account. The public image is already hosted — no ECR setup required.
+Subscribe on [AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-6ujgmfv3k42hu) for a fully managed deployment on ECS Fargate. One-click CloudFormation launch — no Docker, no ECR setup required.
 
 It provisions:
 
@@ -150,35 +149,7 @@ It provisions:
 - **Application Load Balancer** — with optional HTTPS via ACM
 - **Secrets Manager** — stores Jira, Slack, and API credentials securely
 
-You will need: a VPC with at least 2 public subnets.
-
-**One-click deploy (console):**
-
-Click the **Deploy to AWS** button above.
-
-**CLI deploy:**
-
-```bash
-cd deploy/aws
-make deploy \
-  VPC_ID=vpc-xxxxxxxxxxxxxxxxx \
-  PUBLIC_SUBNETS=subnet-aaa,subnet-bbb \
-  PRIVATE_SUBNETS=subnet-ccc,subnet-ddd
-```
-
-After deployment, retrieve your URLs:
-
-```bash
-make outputs
-```
-
-**Self-hosting your own image** (optional — if you've modified the code):
-
-```bash
-cd deploy/aws
-make ecr-public-create        # one-time: creates public ECR repo
-ECR_PUBLIC_ALIAS=your_alias make push-public
-```
+Pricing: **$0.20/hr** per ECS task, with a 7-day free trial.
 
 ---
 
