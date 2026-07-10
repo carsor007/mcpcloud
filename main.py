@@ -10,6 +10,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from audit_api import router as audit_router
 from config.settings import get_settings
 from mcp import router as mcp_router
 from session import get_tracker
@@ -60,6 +61,7 @@ async def health():
 app.include_router(mcp_router, prefix="/mcp", tags=["mcp"])
 app.include_router(ui_router, prefix="/ui", tags=["ui"])
 app.include_router(skills_router, prefix="/api/skills", tags=["skills"])
+app.include_router(audit_router, prefix="/api/audit", tags=["audit"])
 
 
 if __name__ == "__main__":

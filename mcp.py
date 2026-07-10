@@ -24,6 +24,7 @@ still works correctly across workers, only trace IDs are lost.
 """
 
 import json
+import time
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -131,6 +132,7 @@ async def _dispatch(
 
         logger.info("Tool call", tool=tool_name, trace_id=trace_id, company_id=company_id)
 
+        start = time.monotonic()
         try:
             result = await fn(arguments, {"company_id": company_id, "trace_id": trace_id})
             content_text = json.dumps(result.output) if result.success else (result.error or "Skill failed")
@@ -139,12 +141,25 @@ async def _dispatch(
             logger.error("Skill execution error", tool=tool_name, error=str(exc), exc_info=True)
             content_text = str(exc)
             is_error = True
+        duration_ms = (time.monotonic() - start) * 1000
 
         logger.info("Tool result", tool=tool_name, success=not is_error, trace_id=trace_id)
 
         import asyncio
         from skills_store import append_log
+        from audit import record as record_audit
         asyncio.create_task(append_log(at, skill_name, not is_error, content_text if is_error else None))
+        asyncio.create_task(record_audit(
+            agent_type=at,
+            skill_name=skill_name,
+            company_id=company_id,
+            trace_id=trace_id,
+            mcp_session_id=mcp_session_id,
+            arguments=arguments,
+            success=not is_error,
+            error=content_text if is_error else None,
+            duration_ms=duration_ms,
+        ))
 
         return (
             _ok(id_, {

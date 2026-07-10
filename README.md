@@ -142,6 +142,15 @@ Configure by setting `SLACK_WEBHOOK_URL` in `.env`.
 
 ---
 
+## Audit log
+
+Every tool call is recorded — caller, tool name, arguments, success/failure, and latency — and available at:
+
+- **UI:** `http://localhost:8000/ui/audit` — live table, auto-refreshes every 3s, filterable by agent type/skill name
+- **API:** `GET /api/audit?agent_type=jira_ops&skill_name=get_ticket&limit=100`
+
+Entries are also emitted as structured JSON log lines, so they flow into CloudWatch Logs (or any log pipeline) for SIEM ingestion. Backed by Redis when `REDIS_URL` is set (survives restarts, shared across workers); falls back to an in-memory ring buffer otherwise.
+
 ## Configuration
 
 | Variable | Required | Description |

@@ -456,6 +456,7 @@ _HTML = """<!DOCTYPE html>
   <div class="badge">Tool Browser</div>
   <div class="header-right">
     <a href="/ui/skills" class="guide-btn" style="text-decoration:none">+ Skill Editor</a>
+    <a href="/ui/audit" class="guide-btn" style="text-decoration:none">Audit Log</a>
     <button class="guide-btn" onclick="showGuide()">? Guide</button>
     <div class="status">
       <div class="dot" id="status-dot"></div>
@@ -1053,6 +1054,7 @@ _SKILLS_HTML = """<!DOCTYPE html>
   <div class="badge">Skill Editor</div>
   <div class="header-right">
     <a href="/ui" class="nav-link">← Tool Browser</a>
+    <a href="/ui/audit" class="nav-link">Audit Log</a>
   </div>
 </header>
 
@@ -1329,3 +1331,150 @@ openSkill = async function(at, sn) {
 @router.get("/skills", response_class=HTMLResponse, include_in_schema=False)
 async def skill_editor():
     return HTMLResponse(_SKILLS_HTML)
+
+
+_AUDIT_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCPCloud · Audit Log</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #222636;
+    --border: #2e3248; --accent: #6c63ff; --accent-dim: #3d3880;
+    --text: #e2e4f0; --text-dim: #7c82a8;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+    --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; color: var(--text); text-decoration: none; }
+  .logo span { color: var(--accent); }
+  .badge { background: var(--accent-dim); color: var(--accent); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .nav-link { background: none; border: 1px solid var(--border); color: var(--text-dim); border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; transition: border-color 0.15s, color 0.15s; }
+  .nav-link:hover { border-color: var(--accent); color: var(--accent); }
+  .live-dot { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  .main { flex: 1; overflow-y: auto; padding: 20px 24px; }
+
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+  .toolbar input, .toolbar select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; font-family: var(--mono);
+  }
+  .toolbar input:focus, .toolbar select:focus { outline: none; border-color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    text-align: left; padding: 8px 12px; color: var(--text-dim); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;
+    border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg);
+  }
+  tbody td { padding: 7px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tbody tr:hover { background: var(--surface); }
+  .mono { font-family: var(--mono); color: #a9b1d6; }
+  .ok { color: var(--green); }
+  .err { color: var(--red); }
+  .dim { color: var(--text-dim); }
+  .args {
+    max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: var(--mono); color: var(--text-dim);
+  }
+  .empty { padding: 40px; text-align: center; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/ui" class="logo">MCP<span>Cloud</span></a>
+  <div class="badge">Audit Log</div>
+  <div class="header-right">
+    <div class="live-dot"><div class="dot"></div>live</div>
+    <a href="/ui" class="nav-link">← Tool Browser</a>
+    <a href="/ui/skills" class="nav-link">Skill Editor</a>
+  </div>
+</header>
+
+<div class="main">
+  <div class="toolbar">
+    <input id="f-agent" placeholder="Filter by agent type…" spellcheck="false" oninput="refresh()">
+    <input id="f-skill" placeholder="Filter by skill name…" spellcheck="false" oninput="refresh()">
+    <span class="dim" id="count"></span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th><th>Tool</th><th>Caller</th><th>Trace ID</th>
+        <th>Arguments</th><th>Duration</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="empty" id="empty" style="display:none">No tool calls recorded yet — call a tool from the Tool Browser.</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id)
+
+async function refresh() {
+  const agent = $('f-agent').value.trim()
+  const skill = $('f-skill').value.trim()
+  const params = new URLSearchParams({ limit: '200' })
+  if (agent) params.set('agent_type', agent)
+  if (skill) params.set('skill_name', skill)
+
+  try {
+    const res = await fetch(`/api/audit?${params}`)
+    const data = await res.json()
+    render(data.entries || [])
+  } catch (e) {
+    $('rows').innerHTML = ''
+    $('empty').style.display = 'block'
+    $('empty').textContent = 'Could not reach the server.'
+  }
+}
+
+function render(entries) {
+  $('count').textContent = `${entries.length} call${entries.length !== 1 ? 's' : ''}`
+  if (!entries.length) {
+    $('rows').innerHTML = ''
+    $('empty').style.display = 'block'
+    return
+  }
+  $('empty').style.display = 'none'
+  $('rows').innerHTML = entries.map(e => {
+    const t = new Date(e.ts * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})
+    const status = e.success
+      ? '<span class="ok">✓ ok</span>'
+      : `<span class="err" title="${escHtml(e.error || '')}">✗ error</span>`
+    const args = escHtml(JSON.stringify(e.arguments ?? {}))
+    return `<tr>
+      <td class="mono dim">${t}</td>
+      <td class="mono">${e.tool}</td>
+      <td class="mono dim">${e.company_id || '-'}</td>
+      <td class="mono dim">${(e.trace_id || '-').slice(0, 8)}</td>
+      <td class="args" title="${args}">${args}</td>
+      <td class="mono dim">${e.duration_ms?.toFixed(1) ?? '-'} ms</td>
+      <td>${status}</td>
+    </tr>`
+  }).join('')
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+refresh()
+setInterval(refresh, 3000)
+</script>
+</body>
+</html>"""
+
+
+@router.get("/audit", response_class=HTMLResponse, include_in_schema=False)
+async def audit_log_page():
+    return HTMLResponse(_AUDIT_HTML)
