@@ -19,11 +19,11 @@ Parameters:
   # Container images — pre-filled, no action required
   CoreImage:
     Type: String
-    Default: '709825985650.dkr.ecr.us-east-1.amazonaws.com/a2agateway/mcpcloud:v2.1.0'
+    Default: '709825985650.dkr.ecr.us-east-1.amazonaws.com/a2agateway/mcpcloud:v2.1.1'
     Description: 'MCPCloud core image — do not change'
   MeterImage:
     Type: String
-    Default: '709825985650.dkr.ecr.us-east-1.amazonaws.com/a2agateway/mcpcloud-meter:v2.1.0'
+    Default: '709825985650.dkr.ecr.us-east-1.amazonaws.com/a2agateway/mcpcloud-meter:v2.1.1'
     Description: 'MCPCloud metering sidecar — do not change'
 
   # Marketplace — pre-filled, no action required

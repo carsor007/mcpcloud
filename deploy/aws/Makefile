@@ -61,7 +61,10 @@ ecr-public-login:
 	docker login --username AWS --password-stdin public.ecr.aws
 
 build:
-	docker build --platform linux/amd64 -t mcpcloud:latest ../../
+	# --provenance/--sbom disabled: Docker Desktop's default attestation manifests
+	# produce an OCI image index that AWS Marketplace's scanner rejects as
+	# UnsupportedImageType.
+	docker build --platform linux/amd64 --provenance=false --sbom=false -t mcpcloud:latest ../../
 
 push-private: ecr-login build
 	docker tag mcpcloud:latest $(PRIVATE_IMG)
