@@ -88,6 +88,10 @@ Pass the MCP server URL when initializing a client session — the endpoint foll
 
 ## Adding a skill
 
+Two ways to add a skill: drop a file into `skills/` (loaded on startup, lives in your repo), or use the browser editor (saved to Redis, live immediately, no restart or redeploy).
+
+### Option A: filesystem
+
 Drop a `.py` file into `skills/`. Any file with a `register_all()` function is loaded automatically on startup.
 
 ```python
@@ -114,6 +118,21 @@ def register_all():
 ```
 
 Restart the server. The skill appears in the UI and is immediately callable as an MCP tool.
+
+### Option B: browser editor
+
+Open `/ui/skills` for a Monaco-based editor — no filesystem or restart required. Write an async function whose name matches the skill name:
+
+```python
+async def my_skill(input: dict, ctx: dict) -> dict:
+    """One-line description shown in the UI."""
+    return {"success": True, "result": input.get("text", "")}
+
+# Optional: JSON Schema for inputs shown in the tool browser
+# SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}}
+```
+
+Saving `POST`s the code to `/api/skills`, where it's stored in Redis (or in-memory if Redis isn't configured) and registered immediately — the skill is callable as soon as you save, with no restart. This is a separate store from the filesystem skills in `skills/`, so it survives redeploys of the container image but not a Redis wipe; check code in with Option A if you want it version-controlled.
 
 ---
 
